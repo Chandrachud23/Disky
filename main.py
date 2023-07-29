@@ -51,9 +51,8 @@ class Disky:
         select_button = ttk.Button(buttons_frame, text="Select Folder", command=self.select_folder)
         select_button.pack(side=tk.LEFT, padx=(0, 10), pady=10)
         
-        # selected folder path label
-        self.folder_location_display = ttk.Label(buttons_frame, text="No folder selected", style='Custom.TLabel')
-        self.folder_location_display.pack(side=tk.LEFT, padx=(15, 0))
+        self.view_space_display = ttk.Label(buttons_frame, text="0 MB", style='Custom.TLabel')
+        self.view_space_display.pack(side=tk.LEFT, padx=(15, 0))
         
         remove_button = ttk.Button(buttons_frame, text="Remove Duplicates", command=self.remove_duplicates)
         remove_button.pack(side=tk.RIGHT, pady=15)
@@ -85,7 +84,16 @@ class Disky:
         self.treeview.heading('Location', text='Location', anchor=tk.W)
         self.treeview.heading('Size', text='Size', anchor=tk.CENTER)
         self.treeview.heading('HashCode', text='HashCode', anchor=tk.W)
-
+    
+    def convert_size_to_readable(self, size_bytes):
+        # Function to convert size in bytes to human-readable format (MB/KB/GB)
+        # Adapted from: https://stackoverflow.com/a/1094933/12109725
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} TB" 
+        
     def explore_folder(self, folder_location):
         #Go through a folder and find duplicate files
         self.treeview.delete(*self.treeview.get_children())
@@ -113,15 +121,6 @@ class Disky:
                 for chunk in iter(lambda: file.read(4096), b""):
                     hash_obj.update(chunk)
             return hash_obj.hexdigest()
-        
-        def convert_size_to_readable(size_bytes):
-            # Function to convert size in bytes to human-readable format (MB/KB/GB)
-            # Adapted from: https://stackoverflow.com/a/1094933/12109725
-            for unit in ['B', 'KB', 'MB', 'GB']:
-                if size_bytes < 1024.0:
-                    return f"{size_bytes:.2f} {unit}"
-                size_bytes /= 1024.0
-            return f"{size_bytes:.2f} TB"
 
         def index_files_folders(folder_location):
             nonlocal processed_files, progress_parameter, total_files
@@ -133,7 +132,7 @@ class Disky:
                 for file in files:
                     path = os.path.join(root, file)
                     size_bytes = os.path.getsize(path)
-                    size = convert_size_to_readable(size_bytes)
+                    size = self.convert_size_to_readable(size_bytes)
                     hash = generate_hash(path)
 
                     if hash in self.file_list:
@@ -182,13 +181,28 @@ class Disky:
             messagebox.showinfo("Indexing Complete", f"Successfully Indexed {processed_files} files.")
         else:
             messagebox.showinfo("Indexing Cancelled", "Indexing process was cancelled.")
+    
+    def view_space(self, folder_location):
+        # View the space occupied by the selected folder.
+        total_size = 0
 
+        for dirpath, dirnames, filenames in os.walk(folder_location):
+            for file in filenames:
+                filepath = os.path.join(dirpath, file)
+                total_size += os.path.getsize(filepath)
+                
+        # Round the total size to two decimal places for a cleaner display.
+        formatted_size = self.convert_size_to_readable(total_size)
+
+        # Display the folder location and its occupied space.
+        self.view_space_display.configure(text=formatted_size)
+        
     def select_folder(self):
         #open a 'select a folder' dialog and update the label.
         folder_location = filedialog.askdirectory()
 
         if folder_location:
-            self.folder_location_display.configure(text=folder_location)
+            self.view_space(folder_location)
             threading.Thread(target=self.explore_folder, args=(folder_location,), daemon=True).start()
             
     def remove_duplicates(self):
@@ -229,6 +243,9 @@ class Disky:
                     messagebox.showinfo("Error", f"Failed to preview the file: {str(e)}")
             else:
                 messagebox.showinfo("Error", "The file doesn't exists.")
+                
+    
+        
     
 def main():
     root = tk.Tk()
